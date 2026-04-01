@@ -16,6 +16,35 @@ defmodule JSONTest do
     end
   end
 
+  defmodule Unformatted do
+    defstruct [:value]
+
+    defimpl JSON.Encoder do
+      def encode(_token, _encoder) do
+        "{\"foo\":\n\n\n\n\n\n\n\n\n\"bar\"}"
+      end
+    end
+  end
+
+  defmodule MultilineString do
+    defstruct [:value]
+
+    defimpl JSON.Encoder do
+      def encode(_token, _encoder) do
+        inspect("""
+        some
+        new
+        lines
+        here
+        to
+        mess
+        wit
+        ya
+        """)
+      end
+    end
+  end
+
   doctest JSON
 
   describe "encode" do
@@ -222,15 +251,35 @@ defmodule JSONTest do
     end
 
     test "custom structs" do
-      nested = %{wrapper: %Token{value: %{name: "test", nested: %{x: 1}}}}
+      nested = %{
+        wrapper: %Token{
+          value: %{
+            name: "test",
+            nested: %{x: %Unformatted{}, y: %MultilineString{}}
+          }
+        }
+      }
 
-      # Compact: everything inline
+      # Compact: struct produces its own output, including malformed whitespace
       assert JSON.encode!(nested) ==
-               "{\"wrapper\":[{\"name\":\"test\",\"nested\":{\"x\":1}}]}"
+               "{\"wrapper\":[{\"name\":\"test\",\"nested\":{\"x\":{\"foo\":\n\n\n\n\n\n\n\n\n\"bar\"},\"y\":\"some\\nnew\\nlines\\nhere\\nto\\nmess\\nwit\\nya\\n\"}}]}"
 
-      # Formatted: custom wrapper stays compact, nested maps get indented
-      assert JSON.encode!(nested, indent: 2) ==
-               "{\n  \"wrapper\": [{\n    \"name\": \"test\",\n    \"nested\": {\n      \"x\": 1\n    }\n  }]\n}\n"
+      # Formatted: round-trip reformat corrects all struct output
+      assert JSON.encode!(nested, indent: 2) == """
+             {
+               "wrapper": [
+                 {
+                   "name": "test",
+                   "nested": {
+                     "x": {
+                       "foo": "bar"
+                     },
+                     "y": "some\\nnew\\nlines\\nhere\\nto\\nmess\\nwit\\nya\\n"
+                   }
+                 }
+               ]
+             }
+             """
     end
 
     test "calendar" do

@@ -626,6 +626,13 @@ defmodule JSON do
     end
   end
 
+  def protocol_format(value, formatter, state, encoder) when is_map_key(value, :__struct__) do
+    encoder.(value, fn nested, _enc -> formatter.(nested, formatter, state) end)
+    |> IO.iodata_to_binary()
+    |> :json.decode()
+    |> :json.format_value(formatter, state)
+  end
+
   def protocol_format(value, formatter, state, encoder) do
     encoder.(value, fn nested, _enc -> formatter.(nested, formatter, state) end)
   end
